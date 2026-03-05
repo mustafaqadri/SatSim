@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AST SpaceMobile 53° Inclination & 59° FOV Simulation</title>
+    <style>
+        :root {
+            --telus-green: #4ade80;
+            --telus-purple: #8b5cf6;
+            --bg-color: #030308;
+            --panel-bg: rgba(10, 15, 25, 0.75);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--text-main);
+            user-select: none;
+            -webkit-user-select: none;
+            display: flex;
+        }
+        canvas {
+            display: block;
+            outline: none;
+        }
+        
+        /* UI Overlay Styling */
+        #ui-container {
+            position: relative;
+            top: 0;
+            left: 0;
+            width: 380px;
+            height: 100vh;
+            background: var(--panel-bg);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            box-sizing: border-box;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .panel {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 0;
+            width: 100%;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            box-shadow: none;
+            transition: all 0.3s ease;
+        }
+
+        .header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 1.3rem;
+            margin: 0 0 6px 0;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ffffff;
+        }
+        
+        h1::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: var(--telus-green);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--telus-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+        }
+
+        h2 {
+            font-size: 0.85rem;
+            color: var(--telus-purple);
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-muted);
+            margin: 0 0 20px 0;
+        }
+
+        /* Telemetry Grid */
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .telemetry-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .telemetry-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .telemetry-value {
+            font-family: 'Menlo', 'Courier New', monospace;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .value-green { color: var(--telus-green); }
+        .value-purple { color: #a78bfa; }
+        .value-red { color: #ef4444; }
+
+        /* Controls Bar */
+        .controls-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 5px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .controls-bar button {
+            background: rgba(74, 222, 128, 0.15);
+            border: 1px solid var(--telus-green);
+            color: var(--telus-green);
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .controls-bar button:hover {
+            background: rgba(74, 222, 128, 0.3);
+        }
+
+        .controls-bar button.mode-steered {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: var(--telus-purple);
+            color: #c4b5fd;
+        }
+        .controls-bar button.mode-steered:hover {
+            background: rgba(139, 92, 246, 0.3);
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .speed-control select {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* Legend */
+        .legend {
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .color-box {
+            width: 14px;
+            height: 14px;
+            border-radius: 4px;
+        }
+        .cb-orbit { background: #3b82f6; box-shadow: 0 0 8px #3b82f6;}
+        .cb-53 { background: #f59e0b; }
+        .cb-59 { background: #ef4444; }
+
+        /* Controls hint */
+        #controls-hint {
+            position: absolute;
+            bottom: 30px;
+            left: calc(50% + 190px);
+            transform: translateX(-50%);
+            background: rgba(10, 15, 25, 0.8);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 800px) {
+            body { flex-direction: column; }
+            #ui-container {
+                width: 100%;
+                height: auto;
+                max-height: 50vh;
+                border-right: none;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                padding: 16px;
+            }
+            .telemetry-value { font-size: 1rem; }
+            h1 { font-size: 1.1rem; }
+            p { font-size: 0.85rem; margin-bottom: 10px;}
+            #controls-hint { left: 50%; bottom: 20px; }
+            .telemetry-grid { gap: 8px; }
+        }
+    </style>
+    <!-- Import Three.js and OrbitControls via unpkg -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="ui-container">
+        <div class="panel">
+            <div class="header">
+                <h1>AST SpaceMobile</h1>
+                <h2>53° Orbital Dynamics Model</h2>
+            </div>
+            <p>Simulating Block 2 constellation parameters. The <strong>53° inclination</strong> dictates the absolute limit of the sub-satellite point. The array's <strong>59° FOV</strong> extends 3GPP Band 14/5 coverage to ~59°N.</p>
+            
+            <div class="telemetry-grid">
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Sub-Sat Lat</div>
+                    <div class="telemetry-value value-green" id="tele-lat">0.00° N</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Coverage Extent</div>
+                    <div class="telemetry-value value-red" id="tele-extent">0.00° N</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Target Inclination</div>
+                    <div class="telemetry-value value-purple">53.00°</div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="telemetry-label">Coverage Status</div>
+                    <div class="telemetry-value" id="tele-status">NOMINAL</div>
+                </div>
+            </div>
+
+            <div class="controls-bar">
+                <div class="controls-row">
+                    <button id="btn-play-pause">⏸ Pause</button>
+                    <div class="speed-control">
+                        <label for="sim-speed">Speed:</label>
+                        <select id="sim-speed">
+                            <option value="0.25">0.25x</option>
+                            <option value="0.5">0.5x</option>
+                            <option value="1" selected>1.0x</option>
+                            <option value="2">2.0x</option>
+                            <option value="5">5.0x</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="controls-row" style="margin-top: 5px;">
+                    <button id="btn-beam-mode" class="mode-steered">🎯 Mode: Steered Beam</button>
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item"><div class="color-box cb-orbit"></div> Satellite Orbital Path (53° Inc)</div>
+                <div class="legend-item"><div class="color-box cb-53"></div> 53° N/S Sub-Satellite Limit</div>
+                <div class="legend-item"><div class="color-box cb-59"></div> 59° N Maximum Coverage Limit</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls-hint">Drag to Rotate • Scroll to Zoom</div>
+
+    <script>
+        // --- Configuration & Constants ---
+        const EARTH_RADIUS = 10;
+        const LEO_ALTITUDE = 1.8; 
+        const ORBIT_RADIUS = EARTH_RADIUS + LEO_ALTITUDE;
+        const INCLINATION_DEG = 53;
+        const INCLINATION_RAD = INCLINATION_DEG * (Math.PI / 180);
+        const FOV_DEG = 59; 
+        
+        // --- Global Variables ---
+        let scene, camera, renderer, controls;
+        let earth, satelliteGroup, orbitPath;
+        
+        // Beam & Targeting variables
+        let beamGroup, coverageCone, coverageSpotlight, spotLightTarget;
+        let targetMarker, cellRing; 
+        
+        let orbitTheta = 0; 
+        let earthRotation = 0; 
+        
+        // Simulation State
+        let isPlaying = true;
+        let simSpeed = 1.0;
+        let isSteeredBeam = true; // Toggle for Beam Steering behavior
+        const BASE_ORBIT_SPEED = 0.003;
+        const BASE_EARTH_SPEED = 0.0005;
+        
+        // Force the first cell to snap immediately on load
+        let lastStepTheta = -999;
+        const STEP_ANGLE = 0.25; // Angular distance traveled before snapping to new geographic cell
+
+        // UI Elements
+        let latEl, extentEl, statusEl, btnPlayPause, btnBeamMode, selectSpeed;
+
+        function getCanvasSize() {
+            if (window.innerWidth <= 800) {
+                const uiHeight = document.getElementById('ui-container').offsetHeight || (window.innerHeight * 0.4);
+                return { width: window.innerWidth, height: window.innerHeight - uiHeight };
+            }
+            return { width: window.innerWidth - 380, height: window.innerHeight };
+        }
+
+        window.onload = function() {
+            initDOMReferences();
+            init3DScene();
+            animate();
+        };
+
+        function initDOMReferences() {
+            latEl = document.getElementById('tele-lat');
+            extentEl = document.getElementById('tele-extent');
+            statusEl = document.getElementById('tele-status');
+
+            btnPlayPause = document.getElementById('btn-play-pause');
+            selectSpeed = document.getElementById('sim-speed');
+            btnBeamMode = document.getElementById('btn-beam-mode');
+
+            btnPlayPause.addEventListener('click', () => {
+                isPlaying = !isPlaying;
+                btnPlayPause.innerText = isPlaying ? "⏸ Pause" : "▶ Play";
+                btnPlayPause.style.background = isPlaying ? "rgba(74, 222, 128, 0.15)" : "rgba(239, 68, 68, 0.15)";
+                btnPlayPause.style.borderColor = isPlaying ? "var(--telus-green)" : "#ef4444";
+                btnPlayPause.style.color = isPlaying ? "var(--telus-green)" : "#ef4444";
+            });
+
+            btnBeamMode.addEventListener('click', () => {
+                isSteeredBeam = !isSteeredBeam;
+                btnBeamMode.innerText = isSteeredBeam ? "🎯 Mode: Steered Beam" : "⬇️ Mode: Continuous Nadir";
+                btnBeamMode.className = isSteeredBeam ? "mode-steered" : "";
+                
+                // Force an immediate step update if switching back to steered
+                if(isSteeredBeam) lastStepTheta = -999; 
+            });
+
+            selectSpeed.addEventListener('change', (e) => {
+                simSpeed = parseFloat(e.target.value);
+            });
+        }
+
+        function init3DScene() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x030308, 0.008);
+            
+            createStarfield();
+
+            const size = getCanvasSize();
+            camera = new THREE.PerspectiveCamera(45, size.width / size.height, 0.1, 1000);
+            camera.position.set(20, 15, 28);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(size.width, size.height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 15;
+            controls.maxDistance = 80;
+            controls.enablePan = false;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            sunLight.position.set(50, 20, 30);
+            scene.add(sunLight);
+            const backLight = new THREE.DirectionalLight(0x4ade80, 0.5);
+            backLight.position.set(-50, -20, -30);
+            scene.add(backLight);
+
+            createEarth();
+            createLatitudeLine(0, 0x00ff00, false);  // Equator
+            createLatitudeLine(53, 0xf59e0b, true);  // 53 N Max Sub-satellite
+            createLatitudeLine(-53, 0xf59e0b, true); // 53 S
+            createLatitudeLine(59, 0xef4444, true);  // 59 N Max Coverage
+
+            createOrbitPath();
+            createSatelliteAndBeam();
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function createStarfield() {
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.8 });
+            const starsVertices = [];
+            for(let i = 0; i < 3000; i++) {
+                const x = THREE.MathUtils.randFloatSpread(300);
+                const y = THREE.MathUtils.randFloatSpread(300);
+                const z = THREE.MathUtils.randFloatSpread(300);
+                if (Math.sqrt(x*x + y*y + z*z) > 45) starsVertices.push(x, y, z);
+            }
+            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+            scene.add(new THREE.Points(starsGeometry, starsMaterial));
+        }
+
+        function createEarth() {
+            earth = new THREE.Group();
+            
+            // Solid Core
+            const earthMat = new THREE.MeshStandardMaterial({ color: 0x0a192f, roughness: 0.6, metalness: 0.1 });
+            earth.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_RADIUS, 64, 64), earthMat));
+
+            // Atmosphere Glow
+            const atmosMat = new THREE.MeshBasicMaterial({ color: 0x1e3a8a, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, side: THREE.BackSide });
+            earth.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_RADIUS + 0.15, 64, 64), atmosMat));
+
+            // Wireframe Overlay
+            const wireMat = new THREE.MeshBasicMaterial({ color: 0x3b82f6, wireframe: true, transparent: true, opacity: 0.15 });
+            earth.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_RADIUS + 0.05, 32, 16), wireMat));
+
+            // Surface Target Marker (Cell center)
+            targetMarker = new THREE.Group();
+            
+            // Geographic cell ring representation
+            const ringGeo = new THREE.RingGeometry(0.3, 0.5, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+            cellRing = new THREE.Mesh(ringGeo, ringMat);
+            targetMarker.add(cellRing);
+            
+            earth.add(targetMarker);
+            scene.add(earth);
+        }
+
+        function createLatitudeLine(latitudeDeg, colorHex, isDashed) {
+            const latRad = latitudeDeg * (Math.PI / 180);
+            const radiusAtLat = EARTH_RADIUS * Math.cos(latRad);
+            const yHeight = EARTH_RADIUS * Math.sin(latRad);
+
+            const points = [];
+            for (let i = 0; i <= 128; i++) {
+                const theta = (i / 128) * Math.PI * 2;
+                points.push(new THREE.Vector3(radiusAtLat * Math.cos(theta), yHeight, radiusAtLat * Math.sin(theta)));
+            }
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = isDashed 
+                ? new THREE.LineDashedMaterial({ color: colorHex, linewidth: 1, scale: 1, dashSize: 0.4, gapSize: 0.4, transparent: true, opacity: 0.9 })
+                : new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.4 });
+
+            const line = new THREE.Line(geometry, material);
+            if (isDashed) line.computeLineDistances();
+            scene.add(line);
+        }
+
+        function createOrbitPath() {
+            const points = [];
+            for (let i = 0; i <= 128; i++) {
+                const t = (i / 128) * Math.PI * 2;
+                points.push(new THREE.Vector3(ORBIT_RADIUS * Math.cos(t), 0, ORBIT_RADIUS * Math.sin(t)));
+            }
+            orbitPath = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2, transparent: true, opacity: 0.5 }));
+            orbitPath.rotation.x = INCLINATION_RAD;
+            scene.add(orbitPath);
+        }
+
+        function createSatelliteAndBeam() {
+            // 1. Satellite Body (Remains fixed to orbit path, looks down)
+            satelliteGroup = new THREE.Group();
+
+            // Adjusted geometry to ensure the broad flat array faces the Earth under lookAt (+Z alignment)
+            const panelMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
+            satelliteGroup.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.05), panelMat));
+            
+            const solarMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, metalness: 0.5, roughness: 0.5 });
+            satelliteGroup.add(new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.8, 0.02), solarMat));
+
+            scene.add(satelliteGroup);
+
+            // 2. Beam Group (Separate from Satellite body so it can "steer" independently)
+            beamGroup = new THREE.Group();
+
+            const coneHeight = LEO_ALTITUDE + 1.0; 
+            const coneRadius = Math.tan((FOV_DEG / 2) * (Math.PI / 180)) * coneHeight; 
+            const coneGeo = new THREE.ConeGeometry(coneRadius, coneHeight, 64, 1, true);
+            
+            coneGeo.translate(0, -coneHeight / 2, 0); 
+            
+            // CRITICAL FIX: Object3D.lookAt aligns the positive Z axis with the target.
+            // Rotating by negative PI/2 maps the bottom of the cone (-Y) to the positive Z axis.
+            // This ensures the wide base of the cone points towards the Earth instead of deep space.
+            coneGeo.rotateX(-Math.PI / 2); 
+            
+            const coneMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.12, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+            coverageCone = new THREE.Mesh(coneGeo, coneMat);
+            
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending });
+            coverageCone.add(new THREE.LineSegments(new THREE.EdgesGeometry(coneGeo), lineMat));
+
+            beamGroup.add(coverageCone);
+            
+            // Spotlight
+            spotLightTarget = new THREE.Object3D();
+            scene.add(spotLightTarget);
+
+            coverageSpotlight = new THREE.SpotLight(0x4ade80, 5);
+            coverageSpotlight.angle = (FOV_DEG / 2) * (Math.PI / 180);
+            coverageSpotlight.penumbra = 0.3;
+            coverageSpotlight.distance = LEO_ALTITUDE + EARTH_RADIUS + 5;
+            coverageSpotlight.target = spotLightTarget;
+            
+            beamGroup.add(coverageSpotlight);
+            scene.add(beamGroup);
+        }
+
+        function onWindowResize() {
+            const size = getCanvasSize();
+            camera.aspect = size.width / size.height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(size.width, size.height);
+        }
+
+        // --- Main Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isPlaying) {
+                orbitTheta += BASE_ORBIT_SPEED * simSpeed;
+                earthRotation += BASE_EARTH_SPEED * simSpeed;
+            }
+            
+            earth.rotation.y = earthRotation;
+
+            // 1. Position Satellite based on Inclination
+            const worldX = ORBIT_RADIUS * Math.cos(orbitTheta);
+            const worldY = - (ORBIT_RADIUS * Math.sin(orbitTheta)) * Math.sin(INCLINATION_RAD);
+            const worldZ = (ORBIT_RADIUS * Math.sin(orbitTheta)) * Math.cos(INCLINATION_RAD);
+
+            satelliteGroup.position.set(worldX, worldY, worldZ);
+            satelliteGroup.lookAt(0, 0, 0); // Satellite array face remains pointed generally earthward
+
+            // 2. Beam Steering & Targeting Logic
+            let targetWorldPos = new THREE.Vector3();
+
+            if (isSteeredBeam) {
+                // Determine if it's time to "snap" to a new geographical cell
+                if (Math.abs(orbitTheta - lastStepTheta) >= STEP_ANGLE) {
+                    // Find the nadir (point directly below satellite) in world space
+                    const nadirWorld = satelliteGroup.position.clone().normalize().multiplyScalar(EARTH_RADIUS);
+                    
+                    // Convert to Earth's local coordinate system. 
+                    // This allows the target to physically rotate WITH the Earth.
+                    const nadirLocal = earth.worldToLocal(nadirWorld.clone());
+                    
+                    // Update Marker
+                    targetMarker.position.copy(nadirLocal);
+                    
+                    // Orient the cell ring to lie flat on the sphere's surface
+                    // By making it look at the center of the Earth (local 0,0,0)
+                    targetMarker.lookAt(0, 0, 0); 
+                    
+                    lastStepTheta = orbitTheta;
+                }
+                
+                targetMarker.getWorldPosition(targetWorldPos);
+                cellRing.visible = true;
+            } else {
+                // Continuous Nadir Tracking (Standard fluid movement)
+                targetWorldPos = satelliteGroup.position.clone().normalize().multiplyScalar(EARTH_RADIUS);
+                cellRing.visible = false;
+            }
+
+            // Lock the beam to the target (World position ensures it tracks perfectly)
+            beamGroup.position.copy(satelliteGroup.position);
+            beamGroup.lookAt(targetWorldPos);
+            spotLightTarget.position.copy(targetWorldPos);
+
+            // 3. Telemetry Updates
+            const latitudeRad = Math.asin(worldY / ORBIT_RADIUS);
+            let latitudeDeg = latitudeRad * (180 / Math.PI);
+            
+            const latDir = latitudeDeg >= 0 ? 'N' : 'S';
+            const footprintExtent = Math.min(90, Math.abs(latitudeDeg) + 6);
+
+            latEl.innerText = `${Math.abs(latitudeDeg).toFixed(2)}° ${latDir}`;
+            extentEl.innerText = `${footprintExtent.toFixed(2)}° ${latDir}`;
+
+            // Visual Status changes
+            if (latitudeDeg > 46 && latitudeDeg <= 53) {
+                statusEl.innerText = "CANADIAN COVERAGE";
+                statusEl.style.color = "#4ade80"; 
+                coverageCone.material.color.setHex(0x4ade80);
+                coverageCone.children[0].material.color.setHex(0x4ade80);
+                coverageSpotlight.color.setHex(0x4ade80);
+                cellRing.material.color.setHex(0x4ade80);
+                coverageSpotlight.intensity = 8;
+            } else if (latitudeDeg > 53 || latitudeDeg < -53) {
+                statusEl.innerText = "ORBITAL LIMIT REACHED";
+                statusEl.style.color = "#f59e0b";
+                coverageSpotlight.color.setHex(0xf59e0b);
+                cellRing.material.color.setHex(0xf59e0b);
+            } else {
+                statusEl.innerText = "NOMINAL TRANSIT";
+                statusEl.style.color = "#fff";
+                coverageCone.material.color.setHex(0x3b82f6); 
+                coverageCone.children[0].material.color.setHex(0x3b82f6);
+                coverageSpotlight.color.setHex(0x3b82f6);
+                cellRing.material.color.setHex(0x3b82f6);
+                coverageSpotlight.intensity = 5;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
