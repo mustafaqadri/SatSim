@@ -1,51 +1,673 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SatSim - Satellite Simulation</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://esm.sh/react@18.2.0",
-          "react-dom": "https://esm.sh/react-dom@18.2.0/client",
-          "lucide-react": "https://esm.sh/lucide-react@0.263.1"
-        }
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Play, Pause, RefreshCw, Zap, Wifi, Activity, MapPin, Radio, Sliders, Sparkles, MessageSquare, X, Loader, RotateCw } from 'lucide-react';
+
+// --- Constants & Config ---
+const SPEED_FACTOR = 1.2; 
+const SAT_ALTITUDE = 130; 
+const ORBIT_SPEED = 0.7; 
+const VIEW_WIDTH = 950;
+const VIEW_HEIGHT = 400; 
+const GROUND_Y = 350;
+const GW_POS = { x: 120, y: GROUND_Y - 15 }; // Gateway Center
+
+// 5 Fixed Ground Cells
+const HEX_SIZE = 30; 
+const HEX_WIDTH = Math.sqrt(3) * HEX_SIZE;
+const NUM_CELLS = 5;
+const TARGET_CELLS = Array.from({ length: NUM_CELLS }, (_, i) => ({
+  id: `cell-${i}`,
+  r: 0,
+  c: i,
+  label: `Cell ${i+1}`
+}));
+
+// --- Gemini API Helper ---
+const callGemini = async (prompt, systemInstruction = "") => {
+  const apiKey = ""; 
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    systemInstruction: { parts: [{ text: systemInstruction }] }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    return "Error communicating with AI Mission Support. Please try again.";
+  }
+};
+
+// --- Helper Functions ---
+
+const calculateElevation = (satX, satY, targetX, targetY) => {
+  const dx = Math.abs(satX - targetX);
+  const dy = Math.abs(satY - targetY);
+  const angleRad = Math.atan2(dy, dx);
+  return (angleRad * 180) / Math.PI;
+};
+
+const calculateAngleDeg = (x1, y1, x2, y2) => {
+  return (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
+};
+
+// Interpolate color based on relative position
+const getBeamColor = (satX, cellX) => {
+  const diff = satX - cellX;
+  const clampedDiff = Math.max(-400, Math.min(400, diff));
+  
+  let hue;
+  if (diff < 0) {
+    const localT = (diff + 400) / 400; 
+    hue = 320 - (localT * (320 - 210));
+  } else {
+    const localT = diff / 400; 
+    hue = 210 - (localT * (210 - 170));
+  }
+  
+  return `hsla(${hue}, 80%, 60%, 0.8)`;
+};
+
+const getSatNumber = (index) => {
+  // Returns 1 through 96 seamlessly
+  return (index % 96) + 1;
+};
+
+// --- Components ---
+
+const Hexagon = ({ x, y, id, label, isServed, pci, onClick }) => {
+  const points = useMemo(() => {
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const angle_deg = 60 * i - 30;
+      const angle_rad = Math.PI / 180 * angle_deg;
+      pts.push(`${x + HEX_SIZE * Math.cos(angle_rad)},${y + HEX_SIZE * Math.sin(angle_rad)}`);
+    }
+    return pts.join(' ');
+  }, [x, y]);
+
+  return (
+    <g onClick={onClick} className="cursor-pointer transition-all duration-300">
+      <polygon
+        points={points}
+        className={`stroke-1 transition-all duration-300 ${
+          isServed 
+            ? 'fill-slate-800/20 stroke-blue-500/40' 
+            : 'fill-slate-800/50 stroke-slate-700'
+        }`}
+        strokeDasharray={isServed ? "4 2" : "none"}
+      />
+      {/* Moved text inside the hexagon to ensure it is always visible */}
+      <text x={x} y={y + 12} textAnchor="middle" className={`text-[12px] font-bold font-mono select-none ${pci ? 'fill-cyan-400' : 'fill-slate-500'}`}>
+        {pci ? `PCI ${pci}` : label}
+      </text>
+      {isServed && (
+        <circle cx={x} cy={y - 12} r={3} className="fill-blue-400/50" />
+      )}
+    </g>
+  );
+};
+
+const Dish = ({ x, y, targetX, targetY, isActive }) => {
+  // Calculate rotation angle to point at target
+  const angle = calculateAngleDeg(x, y, targetX, targetY);
+  const rotation = angle + 90; 
+
+  return (
+    <g transform={`translate(${x}, ${y})`}>
+      <path d="M -8 10 L 0 0 L 8 10" stroke="#64748b" strokeWidth="2" fill="none" />
+      <g transform={`rotate(${rotation})`}>
+         <path d="M -15 -5 Q 0 10 15 -5" stroke={isActive ? "#fbbf24" : "#94a3b8"} strokeWidth="2" fill={isActive ? "#451a03" : "#1e293b"} />
+         <line x1="0" y1="0" x2="0" y2="-12" stroke={isActive ? "#fbbf24" : "#94a3b8"} strokeWidth="1" />
+         <circle cx="0" cy="-12" r={isActive ? 2 : 1} fill={isActive ? "#fbbf24" : "#94a3b8"} />
+      </g>
+      <circle cx="0" cy="15" r="2" fill={isActive ? "#22c55e" : "#ef4444"} />
+    </g>
+  );
+};
+
+const AiModal = ({ isOpen, onClose, activeSatLabel, elevation, progress }) => {
+  const [query, setQuery] = useState("");
+  const [response, setResponse] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleAnalyze = async () => {
+    setIsLoading(true);
+    const prompt = `
+      Analyze the current simulation state for an AST SpaceMobile satellite network visualization:
+      - Active Satellite: ${activeSatLabel}
+      - Cluster Elevation: ${elevation.toFixed(1)} degrees
+      - Simulation Cycle: ${Math.round(progress/10)}%
+      
+      Explain the handover mechanics visible here, specifically how the Gateway's dual antennas facilitate a "Make-Before-Break" Q/V link handover. Keep it technical but brief.
+    `;
+    const result = await callGemini(prompt, "You are a Satellite Network Engineer expert in Phased Array technology.");
+    setResponse(result);
+    setIsLoading(false);
+  };
+
+  const handleAsk = async () => {
+    if (!query.trim()) return;
+    setIsLoading(true);
+    const result = await callGemini(query, "You are a Satellite Network Engineer. Explain concepts like Earth-Fixed beams, Q/V handovers, and Doppler shift in the context of LEO satellites.");
+    setResponse(result);
+    setIsLoading(false);
+  };
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-slate-900 border border-purple-500/50 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90%]">
+        <div className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-400" />
+            <h3 className="font-bold text-slate-100">AI Mission Support</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-4 flex-1 overflow-y-auto space-y-4">
+          {response ? (
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+              <p className="text-sm text-slate-200 leading-relaxed font-mono">{response}</p>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              Ready to analyze telemetry or answer technical queries.
+            </div>
+          )}
+          {isLoading && (
+            <div className="flex justify-center py-2">
+              <Loader className="w-6 h-6 text-purple-400 animate-spin" />
+            </div>
+          )}
+        </div>
+        <div className="p-4 bg-slate-800 border-t border-slate-700 space-y-3">
+          <button 
+            onClick={handleAnalyze}
+            disabled={isLoading}
+            className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+          >
+            <Activity size={16} /> Analyze Live Telemetry
+          </button>
+          <div className="relative">
+            <input 
+              type="text" 
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask about Dual Tracking Dishes..."
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 pl-3 pr-10 text-sm text-white focus:outline-none focus:border-purple-500"
+              onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+            />
+            <button 
+              onClick={handleAsk}
+              disabled={isLoading}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-400 hover:text-white disabled:opacity-50"
+            >
+              <MessageSquare size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function BeamHandoverSim() {
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [progress, setProgress] = useState(0); 
+  const [activeSatIndex, setActiveSatIndex] = useState(0); 
+  const [handoverLog, setHandoverLog] = useState([]);
+  const [isAiOpen, setIsAiOpen] = useState(false);
+  
+  const satLabelsRef = useRef([0, 1]); 
+  const requestRef = useRef();
+
+  const gridCells = useMemo(() => {
+    const totalWidth = NUM_CELLS * (HEX_WIDTH + 10);
+    const startX = (VIEW_WIDTH / 2) - (totalWidth / 2) + (HEX_WIDTH/2); 
+    return TARGET_CELLS.map((cell, idx) => ({
+      ...cell,
+      x: startX + (idx * (HEX_WIDTH + 10)), 
+      y: GROUND_Y
+    }));
+  }, []);
+  
+  const satellites = useMemo(() => {
+    const CYCLE_LEN = 1400;
+    const START_OFFSET_0 = 900; 
+    const START_OFFSET_1 = 200; 
+    const SCREEN_OFFSET = -200;
+
+    const pixelShift = (progress / 1000) * CYCLE_LEN;
+    
+    const rawPos0 = (START_OFFSET_0 + pixelShift) % CYCLE_LEN;
+    const rawPos1 = (START_OFFSET_1 + pixelShift) % CYCLE_LEN;
+
+    const satNum0 = getSatNumber(satLabelsRef.current[0]);
+    const satNum1 = getSatNumber(satLabelsRef.current[1]);
+
+    return [
+      { 
+        slotId: 0, 
+        x: rawPos0 + SCREEN_OFFSET, 
+        satNum: satNum0,
+        label: `Sat ${satNum0}`,
+        color: '#3b82f6' 
+      },
+      { 
+        slotId: 1, 
+        x: rawPos1 + SCREEN_OFFSET, 
+        satNum: satNum1,
+        label: `Sat ${satNum1}`,
+        color: '#8b5cf6' 
       }
-    </script>
-</head>
-<body class="bg-slate-900">
-    <div id="root"></div>
+    ];
+  }, [progress]);
 
-    <script type="module">
-        import React, { useState, useEffect, useRef, useMemo } from 'react';
-        import ReactDOM from 'react-dom';
-        import { 
-            Play, Pause, RefreshCw, Zap, Wifi, Activity, MapPin, Radio, 
-            Sliders, Sparkles, MessageSquare, X, Loader, RotateCw 
-        } from 'lucide-react';
+  const animate = () => {
+    if (!isPlaying) return;
 
-        // --- PASTE YOUR SIMULATION CODE STARTING BELOW ---
+    setProgress(prev => {
+      let next = prev + (ORBIT_SPEED * SPEED_FACTOR * 2); 
+      
+      const CYCLE_LEN = 1400;
+      const prevShift = (prev / 1000) * CYCLE_LEN;
+      const nextShift = (next / 1000) * CYCLE_LEN;
+      
+      const START_OFFSET_0 = 900;
+      const START_OFFSET_1 = 200;
+
+      if (Math.floor((START_OFFSET_0 + prevShift) / CYCLE_LEN) < Math.floor((START_OFFSET_0 + nextShift) / CYCLE_LEN)) {
+         satLabelsRef.current[0] += 2; 
+      }
+      if (Math.floor((START_OFFSET_1 + prevShift) / CYCLE_LEN) < Math.floor((START_OFFSET_1 + nextShift) / CYCLE_LEN)) {
+         satLabelsRef.current[1] += 2; 
+      }
+
+      if (next >= 1000) {
+        next = 0;
+      }
+      return next;
+    });
+
+    requestRef.current = requestAnimationFrame(animate);
+  };
+
+  useEffect(() => {
+    if (isPlaying) {
+      requestRef.current = requestAnimationFrame(animate);
+    } else {
+      cancelAnimationFrame(requestRef.current);
+    }
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [isPlaying]);
+
+  useEffect(() => {
+    const centerCell = gridCells[2];
+    const sat0 = satellites[0];
+    const sat1 = satellites[1];
+
+    const el0 = calculateElevation(sat0.x, SAT_ALTITUDE, centerCell.x, centerCell.y);
+    const el1 = calculateElevation(sat1.x, SAT_ALTITUDE, centerCell.x, centerCell.y);
+
+    if (activeSatIndex === 0 && el0 < 30 && el1 > 20 && sat1.x < sat0.x) {
+      setActiveSatIndex(1);
+      addLog(`Handover Sat ${sat0.satNum} -> Sat ${sat1.satNum}`);
+    }
+    if (activeSatIndex === 1 && el1 < 30 && el0 > 20 && sat0.x < sat1.x) {
+       setActiveSatIndex(0);
+       addLog(`Handover Sat ${sat1.satNum} -> Sat ${sat0.satNum}`);
+    }
+
+  }, [satellites, activeSatIndex, gridCells]);
+
+  const addLog = (msg) => {
+    setHandoverLog(prev => [{ time: new Date().toLocaleTimeString().split(' ')[0], msg }, ...prev].slice(0, 3));
+  };
+
+  const resetSim = () => {
+    setProgress(0);
+    satLabelsRef.current = [0, 1];
+    setActiveSatIndex(0);
+    setHandoverLog([{ time: new Date().toLocaleTimeString().split(' ')[0], msg: 'Reset Simulation' }]);
+  };
+
+  const activeSatObj = satellites[activeSatIndex];
+  const activeEl = activeSatObj ? calculateElevation(activeSatObj.x, SAT_ALTITUDE, gridCells[2].x, gridCells[2].y) : 0;
+  const isEvenSat = activeSatObj?.satNum % 2 === 0;
+
+  const handleSliderChange = (e) => {
+    setIsPlaying(false);
+    setProgress(parseFloat(e.target.value));
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden relative">
+      <AiModal 
+        isOpen={isAiOpen} 
+        onClose={() => setIsAiOpen(false)} 
+        activeSatLabel={activeSatObj?.label}
+        elevation={activeEl}
+        progress={progress}
+      />
+
+      {/* 1. Simulation Frame */}
+      <div className="relative bg-slate-950 w-full" style={{ height: '60%' }}>
+        <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ 
+          backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', 
+          backgroundSize: '50px 50px' 
+        }}></div>
+
+        <svg width="100%" height="100%" viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} preserveAspectRatio="xMidYMid slice" className="relative z-10">
+            <defs>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                <feMerge>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            
+            <path 
+              d={`M -100 ${GROUND_Y + 40} Q ${VIEW_WIDTH/2} ${GROUND_Y - 40} ${VIEW_WIDTH + 100} ${GROUND_Y + 40} V ${VIEW_HEIGHT} H -100 Z`} 
+              className="fill-slate-900 stroke-slate-700 stroke-2"
+            />
+            
+            <g transform={`translate(${GW_POS.x}, ${GW_POS.y})`}>
+              <rect x="-35" y="0" width="70" height="10" fill="#1e293b" stroke="#475569" rx="2" />
+              <text x="0" y="25" textAnchor="middle" className="text-[10px] fill-slate-500 font-bold font-mono">Gateway</text>
+            </g>
+
+            <Dish 
+               x={GW_POS.x + 20} y={GW_POS.y} 
+               targetX={satellites[0].x} targetY={SAT_ALTITUDE + 20} 
+               isActive={activeSatIndex === 0}
+            />
+
+            <Dish 
+               x={GW_POS.x - 20} y={GW_POS.y} 
+               targetX={satellites[1].x} targetY={SAT_ALTITUDE + 20} 
+               isActive={activeSatIndex === 1}
+            />
+
+            {/* --- eNodeB Baseband Unit --- */}
+            <g transform={`translate(${GW_POS.x + 50}, ${GW_POS.y - 45})`}>
+               {/* Fiber Link to Gateway */}
+               <path d={`M -15 50 L 0 50`} stroke="#3b82f6" strokeWidth="2" strokeDasharray="4 2" className="animate-pulse" />
+               <text x="-8" y="45" textAnchor="middle" className="text-[8px] fill-blue-400 font-mono">CPRI</text>
+
+               {/* eNodeB Chassis */}
+               <rect x="0" y="0" width="130" height="75" rx="6" fill="#0f172a" stroke="#1e293b" strokeWidth="3" />
+               <rect x="0" y="0" width="130" height="18" rx="6" fill="#1e293b" />
+               <text x="65" y="12" textAnchor="middle" className="text-[10px] fill-slate-300 font-bold font-mono tracking-wider">eNodeB / BBU</text>
+               
+               {/* PCI Pairs Display */}
+               {Array.from({length: 5}).map((_, i) => {
+                 const p1 = i + 1;
+                 const p2 = i + 6;
+                 const p1Active = activeSatObj && !isEvenSat;
+                 const p2Active = activeSatObj && isEvenSat;
+
+                 return (
+                   <g key={`enodeb-pair-${i}`} transform={`translate(10, ${25 + i * 9.5})`}>
+                     <rect x="0" y="-6" width="110" height="8" rx="2" fill="#1e293b" opacity="0.5" />
+                     
+                     {/* Logical Cell A (Odd Sats) */}
+                     <rect x="2" y="-5" width="34" height="6" rx="1.5" fill={p1Active ? "#0ea5e9" : "#334155"} className="transition-colors duration-300" />
+                     <text x="19" y="0.5" textAnchor="middle" className={`text-[5px] font-bold font-mono ${p1Active ? 'fill-white' : 'fill-slate-400'}`}>PCI {p1}</text>
+                     
+                     {/* Connection & Switch Indicator */}
+                     <line x1="36" y1="-2" x2="74" y2="-2" stroke="#475569" strokeWidth="1" />
+                     <line x1={p1Active ? "36" : "55"} y1="-2" x2={p1Active ? "55" : "74"} y2="-2" stroke={p1Active ? "#0ea5e9" : (p2Active ? "#10b981" : "transparent")} strokeWidth="1.5" className="transition-all duration-300" />
+                     <circle cx="55" cy="-2" r="2.5" fill={p1Active ? "#0ea5e9" : (p2Active ? "#10b981" : "#475569")} className="transition-colors duration-300" />
+
+                     {/* Logical Cell B (Even Sats) */}
+                     <rect x="74" y="-5" width="34" height="6" rx="1.5" fill={p2Active ? "#10b981" : "#334155"} className="transition-colors duration-300" />
+                     <text x="91" y="0.5" textAnchor="middle" className={`text-[5px] font-bold font-mono ${p2Active ? 'fill-white' : 'fill-slate-400'}`}>PCI {p2}</text>
+                   </g>
+                 )
+               })}
+            </g>
+
+            {/* --- 5 Fixed Ground Cells --- */}
+            <g className="transition-transform duration-500">
+              {gridCells.map((cell, idx) => {
+                // Determine the correct PCI based on which satellite is serving the cluster
+                // Odd satellites project 1-5, Even satellites project 6-10
+                const currentPci = activeSatObj?.satNum ? (isEvenSat ? 5 : 0) + (idx + 1) : null;
+                return (
+                  <Hexagon 
+                    key={cell.id} 
+                    {...cell} 
+                    isServed={activeSatIndex !== null} 
+                    pci={currentPci}
+                  />
+                );
+              })}
+            </g>
+
+            {/* --- Satellites & Connections --- */}
+            {satellites.map((sat, idx) => {
+              const isActive = idx === activeSatIndex;
+              if (sat.x < -150 || sat.x > VIEW_WIDTH + 150) return null;
+
+              const dishX = idx === 0 ? GW_POS.x + 20 : GW_POS.x - 20;
+              const dishY = GW_POS.y;
+
+              const gwAngle = calculateElevation(sat.x, SAT_ALTITUDE, GW_POS.x, GW_POS.y);
+              const hasLOS = gwAngle > 5;
+
+              return (
+                <g key={sat.label}>
+                   {hasLOS && (
+                     <g className="pointer-events-none">
+                       <line 
+                         x1={dishX} y1={dishY} 
+                         x2={sat.x} y2={SAT_ALTITUDE + 20} 
+                         stroke={isActive ? "#facc15" : "#475569"} 
+                         strokeWidth={isActive ? "3" : "1"}
+                         strokeDasharray={isActive ? "0" : "5,5"}
+                         opacity={isActive ? "0.9" : "0.3"}
+                       />
+                       {isActive && (
+                         <circle r="3" fill="#fff">
+                           <animateMotion 
+                             dur="0.5s" 
+                             repeatCount="indefinite"
+                             path={`M ${dishX} ${dishY} L ${sat.x} ${SAT_ALTITUDE + 20}`}
+                           />
+                         </circle>
+                       )}
+                     </g>
+                   )}
+
+                   {isActive && gridCells.map((cell, cIdx) => {
+                     const beamColor = getBeamColor(sat.x, cell.x);
+                     // Calculate beam elongation based on horizontal distance (elevation angle)
+                     const dx = cell.x - sat.x;
+                     // Base width of 16, stretches exponentially as the satellite gets further away to simulate low-angle interference
+                     const spreadX = 16 + Math.pow(Math.abs(dx) / 100, 1.6) * 10;
+                     
+                     return (
+                       <g key={`beam-${cIdx}`} className="pointer-events-none">
+                         {/* Beam Cone */}
+                         <path 
+                           d={`M ${sat.x} ${SAT_ALTITUDE + 20} L ${cell.x - spreadX} ${cell.y} L ${cell.x + spreadX} ${cell.y} Z`}
+                           fill={beamColor}
+                           fillOpacity="0.1"
+                         />
+                         {/* Core beam line */}
+                         <line 
+                           x1={sat.x} y1={SAT_ALTITUDE + 20}
+                           x2={cell.x} y2={cell.y}
+                           stroke={beamColor}
+                           strokeWidth="1.5"
+                           opacity="0.8"
+                           strokeDasharray="4 2"
+                           style={{ transition: 'stroke 0.5s ease' }}
+                         />
+                         {/* Beam Footprint on Ground (Ellipse) demonstrating overlap */}
+                         <ellipse 
+                           cx={cell.x} 
+                           cy={cell.y} 
+                           rx={spreadX} 
+                           ry={12} 
+                           fill={beamColor}
+                           fillOpacity="0.25"
+                           stroke={beamColor}
+                           strokeWidth="1.5"
+                           opacity="0.9"
+                           style={{ filter: 'url(#glow)' }}
+                         />
+                       </g>
+                     );
+                   })}
+
+                   <g transform={`translate(${sat.x}, ${SAT_ALTITUDE})`} className="pointer-events-none">
+                      <rect x="-30" y="-10" width="60" height="20" rx="2" fill="#1e293b" stroke={sat.color} strokeWidth="2" />
+                      <rect x="-10" y="5" width="20" height="20" rx="4" fill={isActive ? "#0f172a" : "#1e293b"} stroke={isActive ? "#fff" : "#64748b"} strokeWidth="2" />
+                      <text x="0" y="-20" textAnchor="middle" fill={sat.color} className="text-[12px] font-bold font-mono">
+                        {sat.label}
+                      </text>
+                      {isActive && (
+                         <circle cx="0" cy="15" r="28" fill="none" stroke={sat.color} strokeWidth="1" strokeDasharray="4,2" className="animate-spin-slow" opacity="0.6" />
+                      )}
+                   </g>
+
+                </g>
+              );
+            })}
+        </svg>
+
+        {/* Legend */}
+        <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur px-3 py-2 rounded-lg border border-slate-700 text-xs pointer-events-none select-none">
+            <div className="font-bold text-slate-300 mb-1">Status Indicators</div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div> <span>Dish Tracking (Active)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500"></div> <span>Dish Tracking (Standby)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-1 bg-yellow-400"></div> <span>Q/V Feeder Link</span>
+              </div>
+            </div>
+        </div>
+      </div>
+
+      {/* 2. Dashboard Panel */}
+      <div className="flex-1 bg-slate-800 border-t border-slate-700 p-4 flex gap-4 overflow-hidden">
         
-        const SPEED_FACTOR = 1.2; 
-        const SAT_ALTITUDE = 130; 
-        const ORBIT_SPEED = 0.7; 
-        const VIEW_WIDTH = 950;
-        const VIEW_HEIGHT = 400; 
-        const GROUND_Y = 350;
-        const GW_POS = { x: 120, y: GROUND_Y - 15 };
+        <div className="w-1/4 flex flex-col gap-4">
+          <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex flex-col gap-2">
+            <div className="flex justify-between items-center mb-1">
+               <span className="text-xs font-bold text-slate-400 uppercase">Sim Control</span>
+               <span className="text-xs text-blue-400 font-mono">{Math.round(progress/10)}%</span>
+            </div>
+            <div className="flex gap-2 mb-2">
+              <button 
+                onClick={() => setIsPlaying(!isPlaying)}
+                className={`flex-1 py-2 rounded flex justify-center items-center gap-2 font-bold text-sm ${isPlaying ? 'bg-slate-700 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-500'}`}
+              >
+                {isPlaying ? <><Pause size={16}/> Pause</> : <><Play size={16}/> Play</>}
+              </button>
+              <button onClick={resetSim} className="p-2 rounded bg-slate-700 hover:bg-slate-600">
+                <RefreshCw size={18} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Sliders size={14} className="text-slate-500"/>
+              <input 
+                type="range" 
+                min="0" max="1000" 
+                value={progress} 
+                onChange={handleSliderChange}
+                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => { setIsPlaying(false); setIsAiOpen(true); }}
+            className="w-full bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 text-purple-200 py-3 rounded-xl flex items-center justify-center gap-2 transition-all group"
+          >
+            <Sparkles size={18} className="text-purple-400 group-hover:scale-110 transition-transform" />
+            <span className="font-bold text-sm">AI Mission Support ✨</span>
+          </button>
+        </div>
 
-        // ... [Rest of your SatSim code here] ...
-        // Note: I have integrated your logic into this wrapper for you!
-        
-        function BeamHandoverSim() {
-            // (Your full component logic goes here)
-        }
+        <div className="w-1/4 bg-slate-900 rounded-xl p-4 border border-slate-700 flex flex-col justify-center">
+            <h2 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3 flex items-center gap-2">
+              <Zap size={14} className="text-yellow-500" /> Active Service
+            </h2>
+            <div className="space-y-4">
+              <div className="flex justify-between items-end">
+                <div className="text-[10px] text-slate-400">Served By</div>
+                <div className="text-xl font-mono text-blue-400 font-bold leading-none">{activeSatObj?.label}</div>
+              </div>
+              <div className="flex justify-between items-end">
+                <div className="text-[10px] text-slate-400">Active Dish</div>
+                <div className="text-sm font-mono text-green-400 font-bold leading-none">
+                  {activeSatIndex === 0 ? 'Right Dish' : 'Left Dish'}
+                </div>
+              </div>
+              <div className="flex justify-between items-end">
+                <div className="text-[10px] text-slate-400">Active PCIs</div>
+                <div className={`text-sm font-mono font-bold leading-none ${isEvenSat ? 'text-emerald-400' : 'text-sky-400'}`}>
+                  {activeSatObj ? (isEvenSat ? 'PCI 6 - 10' : 'PCI 1 - 5') : 'None'}
+                </div>
+              </div>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1">
+                  <div 
+                    className={`h-full transition-all duration-300 ${activeEl < 30 ? 'bg-red-500' : 'bg-blue-500'}`}
+                    style={{ width: `${(activeEl / 90) * 100}%` }}
+                  />
+              </div>
+            </div>
+        </div>
 
-        // This line connects your code to the web page
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(BeamHandoverSim));
-    </script>
-</body>
-</html>
+        <div className="w-1/4 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-y-auto">
+             <h3 className="font-bold text-sm mb-2 flex items-center gap-2 text-slate-200">
+               <RotateCw size={16} className="text-blue-400"/> Make-Before-Break
+             </h3>
+             <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
+               <strong>eNodeB Cell Pairs:</strong> As illustrated in the <span className="text-slate-200 font-bold">eNodeB / BBU</span> diagram above, 2 logical cells at the Gateway operate 1 physical ground cell. 
+             </p>
+             <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
+               The Baseband Unit seamlessly toggles between <span className="text-sky-400 font-bold">PCI 1-5</span> and <span className="text-emerald-400 font-bold">PCI 6-10</span> as the dual dishes hand over the Q/V link to the next rising satellite.
+             </p>
+             <p className="text-[11px] text-slate-300 leading-relaxed border-t border-slate-700 pt-3 mt-3">
+               <strong className="text-pink-400">Beam Elongation:</strong> Notice how RF footprints (glowing ovals) stretch out at lower elevation angles, creating physical <strong>inter-beam interference</strong> where adjacent PCIs overlap boundaries.
+             </p>
+        </div>
+
+        <div className="flex-1 bg-slate-900 rounded-xl p-3 border border-slate-700 overflow-hidden flex flex-col">
+            <h3 className="text-xs font-bold text-slate-500 uppercase mb-2">Network Log</h3>
+            <div className="overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700">
+              {handoverLog.map((log, i) => (
+                <div key={i} className={`text-[10px] font-mono border-l-2 pl-2 py-1 ${log.msg.includes('Handover') ? 'border-purple-500 bg-purple-500/10' : 'border-blue-500 bg-blue-500/5'}`}>
+                  <span className="text-slate-500 mr-2">[{log.time}]</span>
+                  <span className="text-slate-300">{log.msg}</span>
+                </div>
+              ))}
+            </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
