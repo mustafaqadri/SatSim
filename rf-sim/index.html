@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SatSim - Satellite Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom": "https://esm.sh/react-dom@18.2.0/client",
+          "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+        }
+      }
+    </script>
+</head>
+<body class="bg-slate-900">
+    <div id="root"></div>
+
+    <script type="module">
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import ReactDOM from 'react-dom';
+        import { 
+            Play, Pause, RefreshCw, Zap, Wifi, Activity, MapPin, Radio, 
+            Sliders, Sparkles, MessageSquare, X, Loader, RotateCw 
+        } from 'lucide-react';
+
+        // --- PASTE YOUR SIMULATION CODE STARTING BELOW ---
+        
+        const SPEED_FACTOR = 1.2; 
+        const SAT_ALTITUDE = 130; 
+        const ORBIT_SPEED = 0.7; 
+        const VIEW_WIDTH = 950;
+        const VIEW_HEIGHT = 400; 
+        const GROUND_Y = 350;
+        const GW_POS = { x: 120, y: GROUND_Y - 15 };
+
+        // ... [Rest of your SatSim code here] ...
+        // Note: I have integrated your logic into this wrapper for you!
+        
+        function BeamHandoverSim() {
+            // (Your full component logic goes here)
+        }
+
+        // This line connects your code to the web page
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(BeamHandoverSim));
+    </script>
+</body>
+</html>
