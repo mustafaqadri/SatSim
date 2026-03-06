@@ -1,4 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AST SpaceMobile - Beam Handover Simulation</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Babel to compile JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Import Maps for React and Lucide Icons -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "lucide-react": "https://esm.sh/lucide-react@0.344.0"
+        }
+      }
+    </script>
+    <style>
+      /* Hide scrollbars for a clean app-like feel */
+      body { margin: 0; overflow: hidden; background-color: #0f172a; }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
 import { Play, Pause, RefreshCw, Zap, Wifi, Activity, MapPin, Radio, Sliders, Sparkles, MessageSquare, X, Loader, RotateCw } from 'lucide-react';
 
 // --- Constants & Config ---
@@ -106,7 +142,6 @@ const Hexagon = ({ x, y, id, label, isServed, pci, onClick }) => {
         }`}
         strokeDasharray={isServed ? "4 2" : "none"}
       />
-      {/* Moved text inside the hexagon to ensure it is always visible */}
       <text x={x} y={y + 12} textAnchor="middle" className={`text-[12px] font-bold font-mono select-none ${pci ? 'fill-cyan-400' : 'fill-slate-500'}`}>
         {pci ? `PCI ${pci}` : label}
       </text>
@@ -118,7 +153,6 @@ const Hexagon = ({ x, y, id, label, isServed, pci, onClick }) => {
 };
 
 const Dish = ({ x, y, targetX, targetY, isActive }) => {
-  // Calculate rotation angle to point at target
   const angle = calculateAngleDeg(x, y, targetX, targetY);
   const rotation = angle + 90; 
 
@@ -224,7 +258,7 @@ const AiModal = ({ isOpen, onClose, activeSatLabel, elevation, progress }) => {
   );
 };
 
-export default function BeamHandoverSim() {
+function BeamHandoverSim() {
   const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0); 
   const [activeSatIndex, setActiveSatIndex] = useState(0); 
@@ -405,16 +439,13 @@ export default function BeamHandoverSim() {
 
             {/* --- eNodeB Baseband Unit --- */}
             <g transform={`translate(${GW_POS.x + 50}, ${GW_POS.y - 45})`}>
-               {/* Fiber Link to Gateway */}
                <path d={`M -15 50 L 0 50`} stroke="#3b82f6" strokeWidth="2" strokeDasharray="4 2" className="animate-pulse" />
                <text x="-8" y="45" textAnchor="middle" className="text-[8px] fill-blue-400 font-mono">CPRI</text>
 
-               {/* eNodeB Chassis */}
                <rect x="0" y="0" width="130" height="75" rx="6" fill="#0f172a" stroke="#1e293b" strokeWidth="3" />
                <rect x="0" y="0" width="130" height="18" rx="6" fill="#1e293b" />
                <text x="65" y="12" textAnchor="middle" className="text-[10px] fill-slate-300 font-bold font-mono tracking-wider">eNodeB / BBU</text>
                
-               {/* PCI Pairs Display */}
                {Array.from({length: 5}).map((_, i) => {
                  const p1 = i + 1;
                  const p2 = i + 6;
@@ -425,16 +456,13 @@ export default function BeamHandoverSim() {
                    <g key={`enodeb-pair-${i}`} transform={`translate(10, ${25 + i * 9.5})`}>
                      <rect x="0" y="-6" width="110" height="8" rx="2" fill="#1e293b" opacity="0.5" />
                      
-                     {/* Logical Cell A (Odd Sats) */}
                      <rect x="2" y="-5" width="34" height="6" rx="1.5" fill={p1Active ? "#0ea5e9" : "#334155"} className="transition-colors duration-300" />
                      <text x="19" y="0.5" textAnchor="middle" className={`text-[5px] font-bold font-mono ${p1Active ? 'fill-white' : 'fill-slate-400'}`}>PCI {p1}</text>
                      
-                     {/* Connection & Switch Indicator */}
                      <line x1="36" y1="-2" x2="74" y2="-2" stroke="#475569" strokeWidth="1" />
                      <line x1={p1Active ? "36" : "55"} y1="-2" x2={p1Active ? "55" : "74"} y2="-2" stroke={p1Active ? "#0ea5e9" : (p2Active ? "#10b981" : "transparent")} strokeWidth="1.5" className="transition-all duration-300" />
                      <circle cx="55" cy="-2" r="2.5" fill={p1Active ? "#0ea5e9" : (p2Active ? "#10b981" : "#475569")} className="transition-colors duration-300" />
 
-                     {/* Logical Cell B (Even Sats) */}
                      <rect x="74" y="-5" width="34" height="6" rx="1.5" fill={p2Active ? "#10b981" : "#334155"} className="transition-colors duration-300" />
                      <text x="91" y="0.5" textAnchor="middle" className={`text-[5px] font-bold font-mono ${p2Active ? 'fill-white' : 'fill-slate-400'}`}>PCI {p2}</text>
                    </g>
@@ -445,8 +473,6 @@ export default function BeamHandoverSim() {
             {/* --- 5 Fixed Ground Cells --- */}
             <g className="transition-transform duration-500">
               {gridCells.map((cell, idx) => {
-                // Determine the correct PCI based on which satellite is serving the cluster
-                // Odd satellites project 1-5, Even satellites project 6-10
                 const currentPci = activeSatObj?.satNum ? (isEvenSat ? 5 : 0) + (idx + 1) : null;
                 return (
                   <Hexagon 
@@ -496,20 +522,16 @@ export default function BeamHandoverSim() {
 
                    {isActive && gridCells.map((cell, cIdx) => {
                      const beamColor = getBeamColor(sat.x, cell.x);
-                     // Calculate beam elongation based on horizontal distance (elevation angle)
                      const dx = cell.x - sat.x;
-                     // Base width of 16, stretches exponentially as the satellite gets further away to simulate low-angle interference
                      const spreadX = 16 + Math.pow(Math.abs(dx) / 100, 1.6) * 10;
                      
                      return (
                        <g key={`beam-${cIdx}`} className="pointer-events-none">
-                         {/* Beam Cone */}
                          <path 
                            d={`M ${sat.x} ${SAT_ALTITUDE + 20} L ${cell.x - spreadX} ${cell.y} L ${cell.x + spreadX} ${cell.y} Z`}
                            fill={beamColor}
                            fillOpacity="0.1"
                          />
-                         {/* Core beam line */}
                          <line 
                            x1={sat.x} y1={SAT_ALTITUDE + 20}
                            x2={cell.x} y2={cell.y}
@@ -519,7 +541,6 @@ export default function BeamHandoverSim() {
                            strokeDasharray="4 2"
                            style={{ transition: 'stroke 0.5s ease' }}
                          />
-                         {/* Beam Footprint on Ground (Ellipse) demonstrating overlap */}
                          <ellipse 
                            cx={cell.x} 
                            cy={cell.y} 
@@ -671,3 +692,9 @@ export default function BeamHandoverSim() {
     </div>
   );
 }
+
+const root = createRoot(document.getElementById('root'));
+root.render(<BeamHandoverSim />);
+    </script>
+</body>
+</html>
