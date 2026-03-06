@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTN Operations | Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background: radial-gradient(circle at center, #0f172a 0%, #020617 100%); }
+        .glass { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .card-hover:hover { transform: translateY(-5px); border-color: #3b82f6; box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col items-center py-12 px-6">
+    <div class="fixed inset-0 pointer-events-none opacity-20" style="background-image: radial-gradient(white 1px, transparent 1px); background-size: 50px 50px;"></div>
+
+    <header class="text-center mb-16 relative z-10">
+        <div class="flex justify-center mb-4">
+            <div class="p-3 bg-blue-500/20 rounded-full border border-blue-500/50 animate-pulse">
+                <i data-lucide="satellite" class="w-8 h-8 text-blue-400"></i>
+            </div>
+        </div>
+        <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-300">
+            NTN Operations Terminal
+        </h1>
+        <p class="text-slate-400 max-w-xl mx-auto">
+            Interactive simulations for 5G Non-Terrestrial Networks. Select a module to begin technical telemetry analysis.
+        </p>
+    </header>
+
+    <main class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl relative z-10">
+        
+        <a href="./rf-sim/" class="glass p-6 rounded-2xl card-hover transition-all duration-300 group">
+            <div class="flex justify-between items-start mb-4">
+                <i data-lucide="radio" class="w-10 h-10 text-blue-400 group-hover:text-blue-300"></i>
+                <span class="text-[10px] font-bold px-2 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">ONLINE</span>
+            </div>
+            <h2 class="text-xl font-bold mb-2">RF Link & Handover</h2>
+            <p class="text-sm text-slate-400 leading-relaxed">Visualize beam elongation, PCI switching, and "Make-Before-Break" Q/V feeder link handovers.</p>
+        </a>
+
+        <a href="./rx-contour-sim/" class="glass p-6 rounded-2xl card-hover transition-all duration-300 group">
+            <div class="flex justify-between items-start mb-4">
+                <i data-lucide="orbit" class="w-10 h-10 text-purple-400 group-hover:text-purple-300"></i>
+                <span class="text-[10px] font-bold px-2 py-1 rounded bg-slate-700 text-slate-400 border border-slate-600">STAGING</span>
+            </div>
+            <h2 class="text-xl font-bold mb-2">Constellation Dynamics</h2>
+            <p class="text-sm text-slate-400 leading-relaxed">Orbital plane analysis and Inter-Satellite Link (ISL) mesh networking topology.</p>
+        </a>
+
+        <a href="./orbit-sim/" class="glass p-6 rounded-2xl card-hover transition-all duration-300 group">
+            <div class="flex justify-between items-start mb-4">
+                <i data-lucide="smartphone" class="w-10 h-10 text-emerald-400 group-hover:text-emerald-300"></i>
+                <span class="text-[10px] font-bold px-2 py-1 rounded bg-slate-700 text-slate-400 border border-slate-600">STAGING</span>
+            </div>
+            <h2 class="text-xl font-bold mb-2">Direct-to-Device (D2D)</h2>
+            <p class="text-sm text-slate-400 leading-relaxed">Simulating 5G NR-Uu interface performance directly between LEO birds and standard handsets.</p>
+        </a>
+
+        <a href="./tx-contour-sim/" class="glass p-6 rounded-2xl card-hover transition-all duration-300 group">
+            <div class="flex justify-between items-start mb-4">
+                <i data-lucide="database" class="w-10 h-10 text-amber-400 group-hover:text-amber-300"></i>
+                <span class="text-[10px] font-bold px-2 py-1 rounded bg-slate-700 text-slate-400 border border-slate-600">STAGING</span>
+            </div>
+            <h2 class="text-xl font-bold mb-2">Ground Segment Core</h2>
+            <p class="text-sm text-slate-400 leading-relaxed">End-to-end data routing between satellite gateways and the terrestrial 5G core network.</p>
+        </a>
+
+    </main>
+
+    <footer class="mt-20 text-slate-600 text-[11px] uppercase tracking-widest flex items-center gap-4">
+        <span>AST SpaceMobile Simulation Suite</span>
+        <span class="w-1 h-1 bg-slate-700 rounded-full"></span>
+        <span>Version 2.5a</span>
+    </footer>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
