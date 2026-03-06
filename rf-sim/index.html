@@ -23,7 +23,7 @@
     </script>
     <style>
       /* Hide scrollbars for a clean app-like feel */
-      body { margin: 0; overflow: hidden; background-color: #0f172a; }
+      body { margin: 0; overflow-x: hidden; background-color: #0f172a; }
       ::-webkit-scrollbar { width: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
@@ -388,7 +388,8 @@ function BeamHandoverSim() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden relative">
+    // Changed to min-h-screen and flex-col to allow graceful scaling and scrolling if needed on very small devices
+    <div className="flex flex-col min-h-screen bg-slate-900 text-slate-100 font-sans">
       <AiModal 
         isOpen={isAiOpen} 
         onClose={() => setIsAiOpen(false)} 
@@ -397,14 +398,15 @@ function BeamHandoverSim() {
         progress={progress}
       />
 
-      {/* 1. Simulation Frame */}
-      <div className="relative bg-slate-950 w-full" style={{ height: '60%' }}>
+      {/* 1. Simulation Frame - Fixed to scale perfectly using preserveAspectRatio="xMidYMid meet" */}
+      <div className="relative bg-slate-950 w-full flex-shrink-0" style={{ height: '55vh', minHeight: '350px' }}>
         <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ 
           backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', 
           backgroundSize: '50px 50px' 
         }}></div>
 
-        <svg width="100%" height="100%" viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} preserveAspectRatio="xMidYMid slice" className="relative z-10">
+        {/* Changed to "meet" so it scales cleanly without cropping the bottom eNodeB/Cells */}
+        <svg width="100%" height="100%" viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} preserveAspectRatio="xMidYMid meet" className="relative z-10">
             <defs>
               <filter id="glow">
                 <feGaussianBlur stdDeviation="3" result="coloredBlur" />
@@ -590,10 +592,11 @@ function BeamHandoverSim() {
         </div>
       </div>
 
-      {/* 2. Dashboard Panel */}
-      <div className="flex-1 bg-slate-800 border-t border-slate-700 p-4 flex gap-4 overflow-hidden">
+      {/* 2. Dashboard Panel - Converted to a responsive grid layout */}
+      <div className="flex-1 bg-slate-800 border-t border-slate-700 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 overflow-y-auto">
         
-        <div className="w-1/4 flex flex-col gap-4">
+        {/* Panel 1 */}
+        <div className="flex flex-col gap-4">
           <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex flex-col gap-2">
             <div className="flex justify-between items-center mb-1">
                <span className="text-xs font-bold text-slate-400 uppercase">Sim Control</span>
@@ -631,7 +634,8 @@ function BeamHandoverSim() {
           </button>
         </div>
 
-        <div className="w-1/4 bg-slate-900 rounded-xl p-4 border border-slate-700 flex flex-col justify-center">
+        {/* Panel 2 */}
+        <div className="bg-slate-900 rounded-xl p-4 border border-slate-700 flex flex-col justify-center">
             <h2 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3 flex items-center gap-2">
               <Zap size={14} className="text-yellow-500" /> Active Service
             </h2>
@@ -661,7 +665,8 @@ function BeamHandoverSim() {
             </div>
         </div>
 
-        <div className="w-1/4 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-y-auto">
+        {/* Panel 3 */}
+        <div className="bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-y-auto">
              <h3 className="font-bold text-sm mb-2 flex items-center gap-2 text-slate-200">
                <RotateCw size={16} className="text-blue-400"/> Make-Before-Break
              </h3>
@@ -676,7 +681,8 @@ function BeamHandoverSim() {
              </p>
         </div>
 
-        <div className="flex-1 bg-slate-900 rounded-xl p-3 border border-slate-700 overflow-hidden flex flex-col">
+        {/* Panel 4 */}
+        <div className="bg-slate-900 rounded-xl p-3 border border-slate-700 overflow-hidden flex flex-col min-h-[150px]">
             <h3 className="text-xs font-bold text-slate-500 uppercase mb-2">Network Log</h3>
             <div className="overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700">
               {handoverLog.map((log, i) => (
