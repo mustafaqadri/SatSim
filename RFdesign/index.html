@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Condor: NTN Deployment Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hex-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 56px);
+            gap: 4px;
+            justify-content: center;
+        }
+        .hex-container {
+            width: 56px;
+            height: 60px;
+            position: relative;
+        }
+        .hex {
+            width: 100%;
+            height: 100%;
+            clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute;
+            border: 1px solid rgba(0,0,0,0.1);
+            background-color: #f8fafc;
+        }
+        
+        /* Layer Styling */
+        .tn-info {
+            position: absolute;
+            bottom: 8px;
+            font-size: 8px;
+            color: rgba(0,0,0,0.5);
+            width: 100%;
+            text-align: center;
+            transition: color 0.3s;
+        }
+        .ntn-info {
+            position: absolute;
+            top: 8px;
+            font-size: 10px;
+            font-weight: 900;
+            width: 100%;
+            text-align: center;
+            transform: translateY(10px);
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .zone-label {
+            position: absolute;
+            top: -22px;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 800;
+            color: #cbd5e1;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* MOD-3 Colors - Softer for base */
+        .mod-0 { background-color: #eff6ff; border-color: #bfdbfe; }
+        .mod-1 { background-color: #f0fdf4; border-color: #bbf7d0; }
+        .mod-2 { background-color: #fffbeb; border-color: #fef3c7; }
+        
+        /* Active NTN State */
+        .ntn-active {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-width: 2px !important;
+            z-index: 10;
+            transform: translateY(-2px);
+            background-color: white;
+        }
+        .ntn-active .ntn-info { 
+            transform: translateY(0);
+            opacity: 1; 
+        }
+        
+        .collision { 
+            background-color: #ef4444 !important; 
+            border-color: #b91c1c !important;
+            color: white !important;
+            animation: pulse 1s infinite;
+            z-index: 30;
+        }
+        .collision .tn-info { color: white; opacity: 0.9; }
+        .collision .ntn-info { color: white; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1) translateY(-2px); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.05) translateY(-2px); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1) translateY(-2px); }
+        }
+
+        .resource-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1px;
+            background: #334155;
+            border: 2px solid #1e293b;
+        }
+        .re { height: 20px; background: #f1f5f9; position: relative; }
+        .rs-signal { background: #0f172a !important; }
+        .rs-interference { 
+            background: repeating-linear-gradient(45deg, #0f172a, #0f172a 3px, #ef4444 3px, #ef4444 6px) !important; 
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Toggle Button Styles */
+        .zone-toggle {
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .zone-toggle.active {
+            background-color: #2563eb;
+            color: white;
+            border-color: #1e40af;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen antialiased">
+
+    <div class="max-w-7xl mx-auto p-4 lg:p-8">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">Condor Phase 2</span>
+                    <h1 class="text-3xl font-black text-slate-800 tracking-tighter uppercase">RF OVERLAY <span class="text-blue-600 text-stroke">LAB</span></h1>
+                </div>
+                <p class="text-slate-500 text-sm font-medium">Independent NTN vs Terrestrial Frequency Reuse Simulator</p>
+            </div>
+            <div class="mt-6 md:mt-0 flex bg-slate-100 p-1.5 rounded-2xl border">
+                <button onclick="showTab('sim')" id="btn-sim" class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-blue-600">Simulator</button>
+                <button onclick="showTab('guide')" id="btn-guide" class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-slate-700">How to Use</button>
+            </div>
+        </header>
+
+        <!-- Main Tab: Simulator -->
+        <div id="tab-sim" class="tab-content active">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                
+                <!-- Sidebar Controls -->
+                <div class="space-y-6">
+                    <section class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                        <h2 class="font-black text-xs uppercase tracking-widest text-slate-400 mb-6">1. Coverage Control</h2>
+                        
+                        <div class="grid grid-cols-1 gap-3 mb-8">
+                            <button id="toggle-z1" onclick="toggleZone(1)" class="zone-toggle active w-full p-4 rounded-2xl text-left bg-slate-50 border-slate-200 text-slate-600">
+                                <span class="block text-[10px] font-black uppercase opacity-60">Zone 1</span>
+                                <span class="font-bold">Terrestrial Overlay</span>
+                            </button>
+                            <button id="toggle-z2" onclick="toggleZone(2)" class="zone-toggle active w-full p-4 rounded-2xl text-left bg-slate-50 border-slate-200 text-slate-600">
+                                <span class="block text-[10px] font-black uppercase opacity-60">Zone 2</span>
+                                <span class="font-bold">Prairie Buffer</span>
+                            </button>
+                            <button id="toggle-z3" onclick="toggleZone(3)" class="zone-toggle active w-full p-4 rounded-2xl text-left bg-slate-50 border-slate-200 text-slate-600">
+                                <span class="block text-[10px] font-black uppercase opacity-60">Zone 3</span>
+                                <span class="font-bold">White Space</span>
+                            </button>
+                        </div>
+
+                        <h2 class="font-black text-xs uppercase tracking-widest text-slate-400 mb-4">2. Identity Intensity</h2>
+                        <div class="space-y-4">
+                            <div class="px-2">
+                                <input type="range" id="intensityRange" min="0" max="100" value="30" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" oninput="updateSimulation()">
+                                <div class="flex justify-between text-[10px] font-black text-slate-400 mt-3 uppercase">
+                                    <span>Low Risk</span>
+                                    <span>Collision Threshold</span>
+                                    <span>High Risk</span>
+                                </div>
+                            </div>
+                            
+                            <div class="pt-4 border-t border-slate-100">
+                                <label class="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest">Strategy</label>
+                                <select id="scenario" class="w-full text-sm font-bold border-none ring-1 ring-slate-200 p-3 rounded-xl bg-slate-50" onchange="updateSimulation()">
+                                    <option value="uncoordinated">Uncoordinated Planning</option>
+                                    <option value="coordinated">PCI Range Splitting</option>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                        <h2 class="font-black text-xs uppercase tracking-widest text-slate-400 mb-4">Network Health</h2>
+                        <div class="space-y-4 text-xs font-bold">
+                            <div class="flex justify-between items-center p-3 bg-slate-50 rounded-2xl">
+                                <span class="text-slate-500">PCI Collisions:</span> 
+                                <span id="statColl" class="text-red-600 text-sm">0</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-slate-50 rounded-2xl">
+                                <span class="text-slate-500">Mod-3 Conflicts:</span> 
+                                <span id="statInt" class="text-orange-600 text-sm">0</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <h2 class="font-black text-[10px] uppercase tracking-widest text-blue-400">Assistant</h2>
+                        </div>
+                        <div id="chatDisplay" class="text-[11px] leading-relaxed h-28 overflow-y-auto mb-4 space-y-3 pr-2 custom-scrollbar">
+                            <p class="text-slate-400">Select zones and increase intensity to observe spectrum behavior.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="chatInput" placeholder="Ask a question..." class="flex-1 bg-slate-800 border-none rounded-xl p-3 text-xs focus:ring-2 focus:ring-blue-500">
+                            <button onclick="handleChat()" class="bg-blue-600 text-white px-4 rounded-xl font-bold hover:bg-blue-700 transition">↵</button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Simulation View -->
+                <div class="lg:col-span-3 space-y-8">
+                    <div class="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200 relative overflow-hidden">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-12 gap-4">
+                            <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Geographic Topology Map</h2>
+                            <div class="flex items-center gap-6 text-[9px] font-black uppercase text-slate-400">
+                                <span class="flex items-center gap-2"><span class="w-3 h-3 mod-0 rounded-full border border-blue-200"></span> Mod-0</span>
+                                <span class="flex items-center gap-2"><span class="w-3 h-3 mod-1 rounded-full border border-green-200"></span> Mod-1</span>
+                                <span class="flex items-center gap-2"><span class="w-3 h-3 mod-2 rounded-full border-orange-200"></span> Mod-2</span>
+                            </div>
+                        </div>
+
+                        <div class="relative py-14">
+                            <!-- Visual Zone Dividers -->
+                            <div class="absolute inset-0 flex px-2 opacity-40">
+                                <div class="w-1/3 border-r-2 border-dashed border-slate-200 bg-slate-50/50"></div>
+                                <div class="w-1/3 border-r-2 border-dashed border-slate-200 bg-white"></div>
+                                <div class="w-1/3 bg-slate-50/20"></div>
+                            </div>
+                            
+                            <div id="mapGrid" class="hex-grid relative z-10">
+                                <!-- Cells generated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Dashboard -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="font-black text-sm uppercase tracking-wider">Pilot Grid Analysis</h3>
+                                <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Subframe 0</span>
+                            </div>
+                            <div id="resourceGrid" class="resource-grid rounded-xl overflow-hidden">
+                                <!-- REs generated by JS -->
+                            </div>
+                            <div class="flex gap-6 mt-6">
+                                <div class="flex items-center gap-2 text-[10px] font-bold text-slate-600">
+                                    <span class="w-4 h-4 bg-slate-900 rounded-md"></span> Clean Pilot
+                                </div>
+                                <div class="flex items-center gap-2 text-[10px] font-bold text-red-600">
+                                    <span class="w-4 h-4 bg-red-500 rounded-md ring-2 ring-red-200"></span> Collision
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-xl flex flex-col">
+                            <h3 class="font-black text-sm mb-6 text-blue-400 uppercase tracking-widest">Selected Beam Metrics</h3>
+                            <div id="hexInfo" class="space-y-6 flex-1">
+                                <div class="flex items-center justify-center h-full border-2 border-dashed border-slate-800 rounded-3xl">
+                                    <p class="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Select a hex to audit</p>
+                                </div>
+                            </div>
+                            <div class="mt-6 p-4 bg-slate-800 rounded-2xl border border-slate-700">
+                                <p class="text-[10px] leading-relaxed text-slate-400">
+                                    <strong class="text-blue-300">Observation:</strong> In Zone 3, frequency reuse is 100% efficient as no terrestrial interference floor exists.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Tab: Guide -->
+        <div id="tab-guide" class="tab-content">
+            <div class="bg-white p-12 rounded-[2.5rem] shadow-sm border border-slate-200 max-w-4xl mx-auto prose prose-slate">
+                <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter">System Documentation</h2>
+                <p class="lead text-slate-500">Technical guide for the Project Condor RF Simulation environment.</p>
+                
+                <h3 class="text-xl font-bold mt-10">Zone Logic</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+                    <div class="bg-slate-50 p-4 rounded-2xl border">
+                        <h4 class="m-0 text-blue-600">Zone 1</h4>
+                        <p class="text-xs m-0">100% Terrestrial penetration. High collision risk during infill operations.</p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-2xl border">
+                        <h4 class="m-0 text-green-600">Zone 2</h4>
+                        <p class="text-xs m-0">Partial coverage. Transition zone where terrestrial signals fade.</p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-2xl border">
+                        <h4 class="m-0 text-orange-600">Zone 3</h4>
+                        <p class="text-xs m-0">White Space. 0% terrestrial floor. Safe for uncoordinated deployment.</p>
+                    </div>
+                </div>
+
+                <h3 class="text-xl font-bold mt-10">Identity Intensity Slider</h3>
+                <p>This slider simulates <strong>Resource Congestion</strong>. 
+                <ul>
+                    <li><strong>0-50%:</strong> Spectrum is managed. NTN uses reserved PCI ranges to avoid collisions.</li>
+                    <li><strong>51-100%:</strong> Spectrum is crowded. The simulator forces random "ID Theft" (Collision) where the NTN PCI replicates the underlying TN PCI.</li>
+                </ul>
+                </p>
+
+                <h3 class="text-xl font-bold mt-10">Pilot Collision (Mod-3)</h3>
+                <p>Even if PCIs are different, if they share the same Mod-3 value, their Reference Signals (RS) crash. In the <strong>Pilot Grid Analysis</strong>, this is shown as a striped red block. This causes high block error rates even with a strong signal.</p>
+
+                <div class="flex justify-center mt-12">
+                    <button onclick="showTab('sim')" class="px-10 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">Launch Simulator</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let cells = [];
+        let selectedIdx = null;
+        let activeZones = { 1: true, 2: true, 3: true };
+
+        function showTab(id) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + id).classList.add('active');
+            
+            document.getElementById('btn-sim').className = id === 'sim' ? 'px-6 py-2.5 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-blue-600' : 'px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-slate-700';
+            document.getElementById('btn-guide').className = id === 'guide' ? 'px-6 py-2.5 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-blue-600' : 'px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-slate-700';
+        }
+
+        function toggleZone(z) {
+            activeZones[z] = !activeZones[z];
+            document.getElementById(`toggle-z${z}`).classList.toggle('active');
+            updateSimulation();
+        }
+
+        function handleChat() {
+            const input = document.getElementById('chatInput');
+            const display = document.getElementById('chatDisplay');
+            const q = input.value.toLowerCase();
+            let res = "I'm monitoring the Condor simulation. Ask about interference or zone specifics.";
+
+            if (q.includes('zone 3')) res = "<b>Zone 3</b> is unserved by terrestrial cells. In this environment, any PCI you choose for the satellite is effectively 'Reuse 1' with zero interference.";
+            if (q.includes('intensity')) res = "The <b>Intensity</b> slider simulates spectrum density. Once it passes 50%, I start forcing random collisions in the terrestrial-heavy zones to show network failure.";
+            if (q.includes('collision')) res = "A <b>PCI Collision</b> happens when the satellite and the ground tower use the exact same ID. The UE fails to attach because it cannot sync with two identical physical identities.";
+
+            display.innerHTML += `<div class="bg-blue-600/10 p-2 rounded-lg text-blue-300">Q: ${input.value}</div><div class="text-white">${res}</div>`;
+            display.scrollTop = display.scrollHeight;
+            input.value = '';
+        }
+
+        function createMap() {
+            const grid = document.getElementById('mapGrid');
+            grid.innerHTML = '';
+            cells = [];
+            
+            for (let i = 0; i < 60; i++) {
+                const col = i % 10;
+                let zone = 1;
+                if (col >= 4 && col <= 6) zone = 2;
+                if (col >= 7) zone = 3;
+
+                const cell = {
+                    id: i,
+                    zone: zone,
+                    tnPci: zone === 3 ? null : (105 + (i * 7) % 350),
+                    ntnPci: 0,
+                    isColliding: false,
+                    isModConflict: false
+                };
+                cells.push(cell);
+
+                const container = document.createElement('div');
+                container.className = 'hex-container';
+                
+                if (i < 10) {
+                    const label = document.createElement('div');
+                    label.className = 'zone-label';
+                    label.innerText = zone === 1 ? 'Zone 1' : (zone === 2 ? 'Zone 2' : 'Zone 3');
+                    container.appendChild(label);
+                }
+
+                const hex = document.createElement('div');
+                hex.id = `hex-${i}`;
+                hex.className = 'hex';
+                hex.onclick = () => selectCell(i);
+                
+                const ntnInfo = document.createElement('div');
+                ntnInfo.className = 'ntn-info';
+                ntnInfo.innerHTML = `<span class="text-[6px] block opacity-40 uppercase tracking-widest mb-0.5">NTN PCI</span><span id="ntn-val-${i}"></span>`;
+                
+                const tnInfo = document.createElement('div');
+                tnInfo.className = 'tn-info';
+                tnInfo.innerHTML = zone === 3 ? '<span class="opacity-20">—</span>' : `<span class="text-[6px] block opacity-40 uppercase tracking-widest mb-0.5">TN PCI</span><span>${cell.tnPci}</span>`;
+
+                hex.appendChild(ntnInfo);
+                hex.appendChild(tnInfo);
+                container.appendChild(hex);
+                grid.appendChild(container);
+            }
+        }
+
+        function updateSimulation() {
+            const scenario = document.getElementById('scenario').value;
+            const intensity = parseInt(document.getElementById('intensityRange').value);
+            let collCount = 0;
+            let intCount = 0;
+
+            cells.forEach((cell, i) => {
+                const el = document.getElementById(`hex-${i}`);
+                const ntnVal = document.getElementById(`ntn-val-${i}`);
+                const isActive = activeZones[cell.zone];
+
+                // PCI Selection Logic
+                if (scenario === 'uncoordinated') {
+                    cell.ntnPci = (i * 23) % 504;
+                    // Collision Logic: If intensity > 50, random cells in Zone 1/2 collide
+                    if (intensity > 50 && cell.zone < 3) {
+                        const probability = (intensity - 50) / 50; // 0 to 1
+                        if (Math.random() < (probability * 0.4)) { // Up to 40% collision rate at 100 intensity
+                            cell.ntnPci = cell.tnPci;
+                        }
+                    }
+                } else {
+                    cell.ntnPci = 420 + (i % 84); // Coordinated Safe Buffer
+                }
+
+                cell.isColliding = (isActive && cell.tnPci !== null && cell.ntnPci === cell.tnPci);
+                cell.isModConflict = (isActive && cell.tnPci !== null && (cell.ntnPci % 3 === cell.tnPci % 3));
+
+                // UI Updates
+                el.className = `hex mod-${(cell.tnPci || cell.ntnPci) % 3}`;
+                if (isActive) el.classList.add('ntn-active');
+                if (cell.isColliding) {
+                    el.classList.add('collision');
+                    collCount++;
+                }
+                
+                if (cell.isModConflict && !cell.isColliding) {
+                    el.style.borderColor = '#f97316';
+                    el.style.borderWidth = '3px';
+                    intCount++;
+                } else {
+                    el.style.borderWidth = isActive ? '2px' : '1px';
+                    if (!cell.isColliding) el.style.borderColor = '';
+                }
+
+                ntnVal.innerText = cell.ntnPci;
+            });
+
+            document.getElementById('statColl').innerText = collCount;
+            document.getElementById('statInt').innerText = intCount;
+            if (selectedIdx !== null) selectCell(selectedIdx);
+        }
+
+        function createResourceGrid(ntnPci, tnPci = null, isActive = true) {
+            const grid = document.getElementById('resourceGrid');
+            grid.innerHTML = '';
+            const modNTN = ntnPci % 3;
+            const modTN = tnPci !== null ? (tnPci % 3) : null;
+
+            for (let i = 0; i < 84; i++) {
+                const re = document.createElement('div');
+                re.className = 're';
+                const subcarrier = i % 12;
+                const symbol = Math.floor(i / 12);
+                
+                const isRsNTN = isActive && symbol === 0 && (subcarrier === modNTN || subcarrier === modNTN + 6);
+                const isRsTN = tnPci !== null && symbol === 0 && (subcarrier === modTN || subcarrier === modTN + 6);
+
+                if (isRsNTN && isRsTN) re.classList.add('rs-interference');
+                else if (isRsNTN || isRsTN) re.classList.add('rs-signal');
+                
+                grid.appendChild(re);
+            }
+        }
+
+        function selectCell(idx) {
+            selectedIdx = idx;
+            const cell = cells[idx];
+            const isActive = activeZones[cell.zone];
+            
+            createResourceGrid(cell.ntnPci, cell.tnPci, isActive);
+            
+            document.getElementById('hexInfo').innerHTML = `
+                <div class="bg-slate-800 p-5 rounded-3xl border border-slate-700">
+                    <p class="text-[9px] text-blue-400 font-black uppercase tracking-widest mb-1">Topology Context</p>
+                    <div class="flex justify-between items-end">
+                        <h4 class="text-xl font-bold">Zone ${cell.zone}</h4>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg ${isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">
+                            ${isActive ? 'NTN BROADCASTING' : 'NTN MUTE'}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-800 p-4 rounded-3xl border border-slate-700">
+                        <p class="text-[8px] text-slate-500 font-bold uppercase mb-2">Satellite Layer</p>
+                        <p class="text-2xl font-black ${isActive ? 'text-white' : 'text-slate-600'}">${cell.ntnPci}</p>
+                        <p class="text-[10px] text-blue-500 font-bold mt-1">MOD-3: ${cell.ntnPci % 3}</p>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-3xl border border-slate-700">
+                        <p class="text-[8px] text-slate-500 font-bold uppercase mb-2">Terrestrial Layer</p>
+                        <p class="text-2xl font-black ${cell.tnPci ? 'text-white' : 'text-slate-700'}">${cell.tnPci || 'EMPTY'}</p>
+                        <p class="text-[10px] text-slate-500 font-bold mt-1">MOD-3: ${cell.tnPci !== null ? cell.tnPci % 3 : 'N/A'}</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-5 bg-slate-800 rounded-3xl border border-slate-700">
+                    <p class="text-[9px] text-slate-500 font-black uppercase mb-3">Diagnostic Result</p>
+                    ${!isActive ? 
+                        '<p class="text-slate-400 text-xs italic">Beam inactive. No current overlay impact.</p>' :
+                        (cell.zone === 3 ? 
+                            '<p class="text-green-400 font-bold text-xs uppercase tracking-tight">✓ Optimal Deployment. No terrestrial floor detected.</p>' : 
+                            (cell.isColliding ? 
+                                '<p class="text-red-400 font-bold text-xs uppercase tracking-tight">⚠ Critical ID Collision. Network attachment will fail.</p>' : 
+                                (cell.isModConflict ? 
+                                    '<p class="text-orange-400 font-bold text-xs uppercase tracking-tight">⚠ Pilot Pollution. High SINR degradation expected.</p>' : 
+                                    '<p class="text-green-400 font-bold text-xs uppercase tracking-tight">✓ Clean Overlay. Managed interference profile.</p>')))}
+                </div>
+            `;
+        }
+
+        window.onload = () => {
+            createMap();
+            updateSimulation();
+        };
+    </script>
+</body>
+</html>
