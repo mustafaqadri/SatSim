@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Coverage Zones Diagram</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6 flex flex-col items-center font-sans">
+
+    <div class="max-w-[1200px] w-full bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <!-- Header Section -->
+        <div class="bg-slate-900 text-white p-6 text-center border-b-4 border-slate-700">
+            <h1 class="text-3xl font-bold tracking-wide">Network Coverage Zones (TN vs NTN)</h1>
+            <p class="text-slate-300 mt-2">Spectrum utilization boundaries for B5 and B' bands</p>
+        </div>
+
+        <!-- Diagram Section -->
+        <div class="relative w-full aspect-[3/2] bg-white">
+            
+            <!-- SVG Background Layer (Hexagons and Boundaries) -->
+            <svg viewBox="0 0 1200 800" class="absolute inset-0 w-full h-full z-0" id="hex-canvas">
+                <defs>
+                    <clipPath id="zone1">
+                        <rect x="0" y="0" width="400" height="800" />
+                    </clipPath>
+                    <clipPath id="zone2-left">
+                        <rect x="400" y="0" width="200" height="800" />
+                    </clipPath>
+                    <clipPath id="zone2">
+                        <rect x="400" y="0" width="400" height="800" />
+                    </clipPath>
+                    <clipPath id="zone3">
+                        <rect x="800" y="0" width="400" height="800" />
+                    </clipPath>
+                </defs>
+
+                <!-- Zone Backgrounds -->
+                <rect x="0" y="0" width="400" height="800" fill="#ecfdf5" clip-path="url(#zone1)"/>
+                <rect x="400" y="0" width="200" height="800" fill="#f0fdf4" clip-path="url(#zone2-left)"/>
+                <rect x="800" y="0" width="400" height="800" fill="#fff7ed" clip-path="url(#zone3)"/>
+
+                <!-- Groups for injected polygons -->
+                <g id="hex-zone1" clip-path="url(#zone1)"></g>
+                <g id="hex-zone2-left" clip-path="url(#zone2-left)"></g>
+                <g id="hex-zone2-overlay" clip-path="url(#zone2)"></g>
+                <g id="hex-zone3" clip-path="url(#zone3)"></g>
+
+                <!-- Borders & Dividers -->
+                <rect x="0" y="0" width="400" height="800" fill="none" stroke="#334155" stroke-width="3" />
+                <rect x="400" y="0" width="400" height="800" fill="none" stroke="#334155" stroke-width="3" />
+                <rect x="800" y="0" width="400" height="800" fill="none" stroke="#334155" stroke-width="3" />
+
+                <!-- Dotted Line representing Terrestrial Network's Edge -->
+                <line x1="600" y1="0" x2="600" y2="800" stroke="#0f172a" stroke-width="5" stroke-dasharray="16, 16" />
+            </svg>
+
+            <!-- HTML Overlay Layer (Text and UI Elements) -->
+            <div class="absolute inset-0 w-full h-full flex z-10">
+                
+                <!-- Zone 1 Overlay (Left 1/3) -->
+                <div class="w-1/3 h-full relative p-4 lg:p-6 flex flex-col pt-12">
+                    <div class="bg-white/95 backdrop-blur-sm rounded-xl p-4 lg:p-5 shadow-lg border-2 border-emerald-800 text-center relative z-20">
+                        <div class="flex justify-center mb-2 text-emerald-700">
+                            <i data-lucide="radio-tower" class="w-8 h-8 lg:w-10 lg:h-10"></i>
+                        </div>
+                        <h2 class="text-xl lg:text-2xl font-black text-emerald-900 mb-1">Zone 1</h2>
+                        <h3 class="text-sm lg:text-base font-bold text-emerald-700 mb-3">(Within TELUS footprint)</h3>
+                        <div class="bg-emerald-100 text-emerald-800 font-semibold py-1 px-2 rounded mb-3 inline-block text-xs lg:text-sm border border-emerald-200">
+                            Terrestrial Coverage Footprint
+                        </div>
+                        <p class="text-gray-800 text-sm lg:text-base font-medium leading-relaxed bg-white/50 rounded-lg p-2 lg:p-3 shadow-inner">
+                            Both <strong class="text-black">B5</strong> and <strong class="text-black">B'</strong> are fully used by TN and <span class="text-red-600 font-bold">unavailable</span> for use by NTN (AST).
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Zone 2 Overlay (Middle 1/3) -->
+                <div class="w-1/3 h-full relative flex flex-col items-center">
+                    
+                    <!-- Zone 2 Top Header -->
+                    <div class="w-11/12 mt-6 bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-lg border-2 border-slate-400 text-center z-20">
+                        <div class="flex justify-center mb-1 text-slate-700">
+                            <i data-lucide="shield-alert" class="w-6 h-6 lg:w-8 lg:h-8"></i>
+                        </div>
+                        <h2 class="text-xl lg:text-2xl font-black text-slate-800 mb-0">Zone 2</h2>
+                        <h3 class="text-sm lg:text-base font-bold text-slate-600">(Buffer area)</h3>
+                    </div>
+
+                    <!-- Left Side Label (Light Green Hexes) -->
+                    <div class="absolute top-1/3 left-4 w-5/12 max-w-[140px] bg-white/95 rounded-lg p-2 lg:p-3 shadow-md border-l-4 border-emerald-400 text-center z-20">
+                        <p class="text-xs lg:text-sm font-bold text-emerald-800 leading-tight">
+                            B5 used by TN
+                        </p>
+                    </div>
+
+                    <!-- Dotted Line Label -->
+                    <div class="absolute top-[55%] left-1/2 -translate-x-1/2 whitespace-nowrap bg-slate-900 text-white px-3 lg:px-4 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-bold shadow-xl border-2 border-slate-700 z-30 flex items-center gap-2">
+                        <i data-lucide="map" class="w-4 h-4 lg:w-5 lg:h-5"></i>
+                        Terrestrial Network's Edge
+                    </div>
+
+                    <!-- Center Overlay Label -->
+                    <div class="absolute bottom-12 w-11/12 bg-white/95 backdrop-blur-sm rounded-xl p-3 lg:p-4 shadow-lg border-2 border-orange-400 text-center z-20">
+                        <p class="text-gray-800 font-semibold text-sm lg:text-base">
+                            <strong class="text-orange-600">B'</strong> can be used for <span class="text-orange-700 font-bold">NTN (AST)</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Zone 3 Overlay (Right 1/3) -->
+                <div class="w-1/3 h-full relative p-4 lg:p-6 flex flex-col pt-12">
+                    <div class="bg-white/95 backdrop-blur-sm rounded-xl p-4 lg:p-5 shadow-lg border-2 border-orange-600 text-center z-20">
+                        <div class="flex justify-center mb-2 text-orange-600">
+                            <i data-lucide="satellite" class="w-8 h-8 lg:w-10 lg:h-10"></i>
+                        </div>
+                        <h2 class="text-xl lg:text-2xl font-black text-orange-900 mb-1">Zone 3</h2>
+                        <h3 class="text-sm lg:text-base font-bold text-orange-700 mb-3">(Out of TELUS coverage)</h3>
+                        <div class="bg-orange-100 text-orange-800 font-semibold py-1 px-2 rounded mb-3 inline-block text-xs lg:text-sm border border-orange-200">
+                            NTN Cells (AST)
+                        </div>
+                        <p class="text-gray-800 text-sm lg:text-base font-medium leading-relaxed bg-white/50 rounded-lg p-2 lg:p-3 shadow-inner">
+                            Both <strong class="text-black">B5</strong> and <strong class="text-black">B'</strong> bands are <span class="text-emerald-600 font-bold">available</span> to use for NTN (AST).
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Script to Generate Hexagons procedurally -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Initialize Icons
+            lucide.createIcons();
+
+            // Hexagon Math
+            const R_sm = 14; 
+            const R_lg = R_sm * 3; 
+
+            const W_sm = Math.sqrt(3) * R_sm;
+            const H_sm = 1.5 * R_sm;
+            const W_lg = Math.sqrt(3) * R_lg;
+            const H_lg = 1.5 * R_lg;
+
+            // Generate points
+            const smPoints = [];
+            for (let r = -1; r < 800 / H_sm + 2; r++) {
+                for (let c = -1; c < 1200 / W_sm + 2; c++) {
+                    smPoints.push({
+                        cx: c * W_sm + (r % 2 ? W_sm / 2 : 0),
+                        cy: r * H_sm,
+                    });
+                }
+            }
+
+            const lgPoints = [];
+            for (let r = -1; r < 800 / H_lg + 2; r++) {
+                for (let c = -1; c < 1200 / W_lg + 2; c++) {
+                    lgPoints.push({
+                        cx: c * W_lg + (r % 2 ? W_lg / 2 : 0),
+                        cy: r * H_lg,
+                    });
+                }
+            }
+
+            // Create SVG Polygon string
+            const renderHex = (cx, cy, R, fill, stroke, fillOpacity = 1, strokeOpacity = 1) => {
+                const w = Math.sqrt(3) * R;
+                const points = `
+                    ${cx},${cy - R}
+                    ${cx + w / 2},${cy - R / 2}
+                    ${cx + w / 2},${cy + R / 2}
+                    ${cx},${cy + R}
+                    ${cx - w / 2},${cy + R / 2}
+                    ${cx - w / 2},${cy - R / 2}
+                `;
+                return `<polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" fill-opacity="${fillOpacity}" stroke-opacity="${strokeOpacity}" />`;
+            };
+
+            // Inject Zones
+            const zone1Html = smPoints.map(pt => renderHex(pt.cx, pt.cy, R_sm, '#166534', '#14532d', 0.85)).join('');
+            document.getElementById('hex-zone1').innerHTML = zone1Html;
+
+            const zone2LeftHtml = smPoints.map(pt => renderHex(pt.cx, pt.cy, R_sm, '#86efac', '#4ade80', 0.85)).join('');
+            document.getElementById('hex-zone2-left').innerHTML = zone2LeftHtml;
+
+            const zone2OverlayHtml = lgPoints.map(pt => renderHex(pt.cx, pt.cy, R_lg, '#fdba74', '#ea580c', 0.35, 0.8)).join('');
+            document.getElementById('hex-zone2-overlay').innerHTML = zone2OverlayHtml;
+
+            const zone3Html = lgPoints.map(pt => renderHex(pt.cx, pt.cy, R_lg, '#f97316', '#c2410c', 0.75)).join('');
+            document.getElementById('hex-zone3').innerHTML = zone3Html;
+        });
+    </script>
+</body>
+</html>
