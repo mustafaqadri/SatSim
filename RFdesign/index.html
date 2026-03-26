@@ -425,15 +425,32 @@
                 // PCI Selection Logic
                 if (scenario === 'uncoordinated') {
                     cell.ntnPci = (i * 23) % 504;
-                    // Collision Logic: If intensity > 50, random cells in Zone 1/2 collide
-                    if (intensity > 50 && cell.zone < 3) {
-                        const probability = (intensity - 50) / 50; // 0 to 1
-                        if (Math.random() < (probability * 0.4)) { // Up to 40% collision rate at 100 intensity
+                    
+                    // Logic for Zone 1 "No Availability" constraint
+                    // High collision density even at low intensity to reflect saturated B5 Prime
+                    if (cell.zone === 1) {
+                        const baseProb = 0.65; // 65% base collision chance in Zone 1
+                        const intensityFactor = (intensity / 100) * 0.35;
+                        if (Math.random() < (baseProb + intensityFactor)) {
+                            cell.ntnPci = cell.tnPci;
+                        }
+                    } else if (intensity > 50 && cell.zone === 2) {
+                        // Standard collision logic for Zone 2 buffer
+                        const probability = (intensity - 50) / 50;
+                        if (Math.random() < (probability * 0.4)) {
                             cell.ntnPci = cell.tnPci;
                         }
                     }
                 } else {
-                    cell.ntnPci = 420 + (i % 84); // Coordinated Safe Buffer
+                    // Coordinated Strategy: 
+                    // Even in coordinated mode, Zone 1 is saturated, so we simulate 
+                    // that finding a "Clean" PCI is still difficult but better than uncoordinated.
+                    if (cell.zone === 1) {
+                        cell.ntnPci = 420 + (i % 84);
+                        if (Math.random() < 0.15) cell.ntnPci = cell.tnPci; // Residual collision chance
+                    } else {
+                        cell.ntnPci = 420 + (i % 84);
+                    }
                 }
 
                 cell.isColliding = (isActive && cell.tnPci !== null && cell.ntnPci === cell.tnPci);
